@@ -29,7 +29,7 @@
             margin-bottom: 25px; /* Increased to make room for lock icons */
         }
         .alphabet-letter {
-            width: 23px;
+            width: 25px;
             height: 30px;
             border: 1px solid #ddd;
             display: flex;
@@ -123,6 +123,7 @@
         }
         .alphabet-letter-wrapper {
             position: relative;
+            width: 25px;
         }
         .click-indicator {
             position: absolute;
@@ -461,9 +462,12 @@
                     <div className="alphabet-container">
                         <h3>Standard Alphabet (by Input Frequency)</h3>
                         <div className="alphabet-row">
+
                             {standardAlphabet.map((letter, index) => (
-                                <div key={index} className="alphabet-letter">
-                                    {letter}
+                                <div className="alphabet-letter-wrapper">
+                                    <div key={index} className="alphabet-letter">
+                                        {letter}
+                                    </div>
                                 </div>
                             ))}
                         </div>
