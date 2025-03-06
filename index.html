@@ -44,6 +44,9 @@
             transform: scale(1.05);
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
         }
+        .alphabet-letter.similar-frequency {
+            background-color: #e0f0c0;
+        }
         .alphabet-letter.locked {
             background-color: #f8f8f8;
             cursor: not-allowed;
@@ -208,6 +211,8 @@
             const [doubleLetters, setDoubleLetters] = React.useState([]);
             const [lockedIndices, setLockedIndices] = React.useState(new Set());
             const [clickIndicators, setClickIndicators] = React.useState({});
+            const [letterFrequencies, setLetterFrequencies] = React.useState({});
+            const [similarFrequencyIndices, setSimilarFrequencyIndices] = React.useState([]);
 
             // Calculate letter frequencies in the input text
             const calculateFrequency = (text) => {
@@ -218,6 +223,9 @@
                 for (let char of cleanText) {
                     frequencies[char] = (frequencies[char] || 0) + 1;
                 }
+
+                // Store the raw frequencies
+                setLetterFrequencies(frequencies);
 
                 // Sort letters by frequency in descending order
                 return Object.entries(frequencies)
@@ -269,6 +277,50 @@
                     }));
             };
 
+            // Calculate standard deviation of frequencies
+            const calculateStandardDeviation = (values) => {
+                const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+                const squareDiffs = values.map(value => Math.pow(value - avg, 2));
+                const avgSquareDiff = squareDiffs.reduce((sum, val) => sum + val, 0) / squareDiffs.length;
+                return Math.sqrt(avgSquareDiff);
+            };
+
+            // Highlight letters with similar frequency
+            const highlightSimilarFrequencies = (letter, index) => {
+                // Clear any previous highlights
+                setSimilarFrequencyIndices([]);
+
+                // If there's no input text, do nothing
+                if (Object.keys(letterFrequencies).length === 0) {
+                    return;
+                }
+
+                // Get the frequency of the selected letter
+                const selectedFrequency = letterFrequencies[standardAlphabet[index]] || 0;
+
+                // Get all frequencies as an array
+                const frequencyValues = Object.values(letterFrequencies);
+
+                // Calculate standard deviation
+                const stdDev = calculateStandardDeviation(frequencyValues);
+
+                // Find letters with frequencies within one standard deviation
+                const similarIndices = standardAlphabet.map((letter, idx) => {
+                    const letterFreq = letterFrequencies[letter] || 0;
+                    // Check if the frequency is within 1 standard deviation
+                    if (
+                        Math.abs(letterFreq - selectedFrequency) <= stdDev &&
+                        idx !== index && // Don't include the selected letter itself
+                        letterFreq > 0   // Only include letters that actually appear in the text
+                    ) {
+                        return idx;
+                    }
+                    return null;
+                }).filter(idx => idx !== null);
+
+                setSimilarFrequencyIndices(similarIndices);
+            };
+
             // Show click animation on letter
             const showClickAnimation = (index) => {
                 setClickIndicators(prev => ({...prev, [index]: true}));
@@ -290,6 +342,8 @@
 
                 if (selectedLetters.length === 0) {
                     setSelectedLetters([{letter, index}]);
+                    // Highlight letters with similar frequency
+                    highlightSimilarFrequencies(letter, index);
                 } else if (selectedLetters.length === 1) {
                     const first = selectedLetters[0];
                     const second = {letter, index};
@@ -298,6 +352,7 @@
                         // Check if second letter is locked
                         if (lockedIndices.has(second.index)) {
                             setSelectedLetters([]);
+                            setSimilarFrequencyIndices([]);
                             return;
                         }
 
@@ -307,10 +362,12 @@
 
                         setDecodingAlphabet(newDecoding);
                         setSelectedLetters([]);
+                        setSimilarFrequencyIndices([]);
                         decryptText(newDecoding, inputText);
                     } else {
                         // Clicking the same letter twice deselects it
                         setSelectedLetters([]);
+                        setSimilarFrequencyIndices([]);
                     }
                 }
             };
@@ -330,6 +387,7 @@
                 // If a locked letter was selected, deselect it
                 if (selectedLetters.some(item => item.index === index)) {
                     setSelectedLetters([]);
+                    setSimilarFrequencyIndices([]);
                 }
             };
 
@@ -373,6 +431,10 @@
                 // Update standard alphabet with input text frequency
                 setStandardAlphabet(fullInputFrequency);
 
+                // Clear any selected letters when input changes
+                setSelectedLetters([]);
+                setSimilarFrequencyIndices([]);
+
                 // Decrypt with current decoding alphabet
                 decryptText(decodingAlphabet, text);
             };
@@ -387,7 +449,9 @@
                     <h1>Monoalphabetic Cipher Decoder</h1>
 
                     <div className="swap-hint">
-                        Click two letters to swap their positions in the decoding alphabet. Use the padlock icons to lock/unlock letters.
+                        Click two letters to swap their positions in the decoding alphabet. When a letter is selected,
+                        letters with similar frequency (within one standard deviation) will be highlighted in green.
+                        Use the padlock icons to lock/unlock letters.
                     </div>
 
                     <div className="frequency-info">
@@ -409,9 +473,10 @@
                             {decodingAlphabet.map((letter, index) => (
                                 <div className="alphabet-letter-wrapper" key={index}>
                                     <div
-                                        className={`alphabet-letter ${
-                                            selectedLetters.some(sl => sl.index === index) ? 'selected' : ''
-                                        } ${lockedIndices.has(index) ? 'locked' : ''}`}
+                                        className={`alphabet-letter
+                                            ${selectedLetters.some(sl => sl.index === index) ? 'selected' : ''}
+                                            ${similarFrequencyIndices.includes(index) ? 'similar-frequency' : ''}
+                                            ${lockedIndices.has(index) ? 'locked' : ''}`}
                                         onClick={() => handleLetterClick(letter, index)}
                                     >
                                         {letter}
