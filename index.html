@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Monoalphabetic Cipher Decoder</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/17.0.2/umd/react.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .cipher-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .alphabet-container {
+            margin-bottom: 20px;
+        }
+        .alphabet-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        .alphabet-letter {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .alphabet-letter.selected {
+            background-color: #e0e0e0;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            margin-bottom: 10px;
+        }
+        .swap-hint {
+            color: #666;
+            font-size: 0.8em;
+            margin-bottom: 10px;
+        }
+        .frequency-info {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        .bigrams-container, .double-letters-container {
+            margin-top: 20px;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .bigrams-list, .double-letters-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .bigram-item, .double-letter-item {
+            background-color: #e0e0e0;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 0.9em;
+            width: 50px;
+        }
+        .english-bigrams-container, .english-double-letters-container {
+            margin-top: 20px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function MonoalphabeticDecoder() {
+            // Standard English letter frequency
+            const englishFrequency = 'ETAOINSHRDLCUMWFGYPBVKJXQZ'.split('');
+
+            // Most common English bigrams (based on typical linguistic research)
+            const englishCommonBigrams = [
+                {bigram: 'TH', count: 1},
+                {bigram: 'HE', count: 1},
+                {bigram: 'IN', count: 1},
+                {bigram: 'EN', count: 1},
+                {bigram: 'NT', count: 1},
+                {bigram: 'RE', count: 1},
+                {bigram: 'ER', count: 1},
+                {bigram: 'AN', count: 1},
+                {bigram: 'TI', count: 1},
+                {bigram: 'ES', count: 1},
+                {bigram: 'ON', count: 1},
+                {bigram: 'AT', count: 1},
+                {bigram: 'SE', count: 1},
+                {bigram: 'ND', count: 1},
+                {bigram: 'OR', count: 1},
+                {bigram: 'AR', count: 1},
+                {bigram: 'AL', count: 1},
+                {bigram: 'TE', count: 1},
+                {bigram: 'CO', count: 1},
+                {bigram: 'DE', count: 1},
+                {bigram: 'TO', count: 1},
+                {bigram: 'RA', count: 1},
+                {bigram: 'ET', count: 1},
+                {bigram: 'ED', count: 1},
+                {bigram: 'IT', count: 1},
+                {bigram: 'SA', count: 1},
+                {bigram: 'EM', count: 1}
+            ];
+
+            // Most common English double letters
+            const englishCommonDoubleLetters = [
+                {doubleLetter: 'EE', count: 1},
+                {doubleLetter: 'LL', count: 1},
+                {doubleLetter: 'SS', count: 1},
+                {doubleLetter: 'OO', count: 1},
+                {doubleLetter: 'TT', count: 1},
+                {doubleLetter: 'FF', count: 1},
+                {doubleLetter: 'RR', count: 1},
+                {doubleLetter: 'NN', count: 1},
+                {doubleLetter: 'PP', count: 1},
+                {doubleLetter: 'CC', count: 1}
+            ];
+
+            // Initial state uses English frequency
+            const initialStandardAlphabet = englishFrequency.slice();
+            const initialDecodingOrder = englishFrequency.slice();
+
+            // Create initial decoding alphabet by matching the original alphabet's order
+            const initialDecodingAlphabet = initialStandardAlphabet.map((letter, index) =>
+                initialDecodingOrder[index]
+            );
+
+            const [standardAlphabet, setStandardAlphabet] = React.useState(initialStandardAlphabet);
+            const [decodingAlphabet, setDecodingAlphabet] = React.useState(initialDecodingAlphabet);
+            const [inputText, setInputText] = React.useState('');
+            const [outputText, setOutputText] = React.useState('');
+            const [selectedLetters, setSelectedLetters] = React.useState([]);
+            const [mostCommonBigrams, setMostCommonBigrams] = React.useState([]);
+            const [doubleLetters, setDoubleLetters] = React.useState([]);
+
+            // Calculate letter frequencies in the input text
+            const calculateFrequency = (text) => {
+                const cleanText = text.toUpperCase().replace(/[^A-Z]/g, '');
+                const frequencies = {};
+
+                // Count letter occurrences
+                for (let char of cleanText) {
+                    frequencies[char] = (frequencies[char] || 0) + 1;
+                }
+
+                // Sort letters by frequency in descending order
+                return Object.entries(frequencies)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(entry => entry[0]);
+            };
+
+            // Calculate most common bigrams
+            const calculateBigrams = (text) => {
+                const cleanText = text.toUpperCase().replace(/[^A-Z]/g, '');
+                const bigramFrequencies = {};
+
+                // Count bigram occurrences
+                for (let i = 0; i < cleanText.length - 1; i++) {
+                    const bigram = cleanText.slice(i, i + 2);
+                    bigramFrequencies[bigram] = (bigramFrequencies[bigram] || 0) + 1;
+                }
+
+                // Sort bigrams by frequency in descending order
+                return Object.entries(bigramFrequencies)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 18)  // Top 18 bigrams
+                    .map(entry => ({
+                        bigram: entry[0],
+                        count: entry[1]
+                    }));
+            };
+
+            // Calculate double letter frequencies
+            const calculateDoubleLetters = (text) => {
+                const cleanText = text.toUpperCase().replace(/[^A-Z]/g, '');
+                const doubleLetterFrequencies = {};
+
+                // Count double letter occurrences
+                for (let i = 0; i < cleanText.length - 1; i++) {
+                    if (cleanText[i] === cleanText[i + 1]) {
+                        const doubleLetter = cleanText[i] + cleanText[i];
+                        doubleLetterFrequencies[doubleLetter] = (doubleLetterFrequencies[doubleLetter] || 0) + 1;
+                    }
+                }
+
+                // Sort double letters by frequency in descending order
+                return Object.entries(doubleLetterFrequencies)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 9)  // Top 9 double letters
+                    .map(entry => ({
+                        doubleLetter: entry[0],
+                        count: entry[1]
+                    }));
+            };
+
+            const handleLetterClick = (letter, index) => {
+                if (selectedLetters.length === 0) {
+                    setSelectedLetters([{letter, index}]);
+                } else if (selectedLetters.length === 1) {
+                    const first = selectedLetters[0];
+                    const second = {letter, index};
+
+                    if (first.index !== second.index) {
+                        const newDecoding = [...decodingAlphabet];
+                        [newDecoding[first.index], newDecoding[second.index]] =
+                        [newDecoding[second.index], newDecoding[first.index]];
+
+                        setDecodingAlphabet(newDecoding);
+                        setSelectedLetters([]);
+                        decryptText(newDecoding, inputText);
+                    }
+                }
+            };
+
+            const decryptText = (alphabet, text) => {
+                const mapping = {};
+                standardAlphabet.forEach((stdLetter, i) => {
+                    mapping[stdLetter] = alphabet[i];
+                });
+
+                const decrypted = text.toUpperCase().split('').map(char => {
+                    return mapping[char] || char;
+                }).join('');
+
+                setOutputText(decrypted);
+            };
+
+            const handleInputChange = (e) => {
+                const text = e.target.value;
+                setInputText(text);
+
+                // Calculate input text frequency
+                const inputFrequency = calculateFrequency(text);
+
+                // Pad input frequency with remaining English alphabet letters
+                const fullInputFrequency = inputFrequency.slice(0, 26);
+                while (fullInputFrequency.length < 26) {
+                    const missingLetters = englishFrequency.filter(
+                        letter => !fullInputFrequency.includes(letter)
+                    );
+                    fullInputFrequency.push(missingLetters[0]);
+                }
+
+                // Calculate most common bigrams
+                const topBigrams = calculateBigrams(text);
+                setMostCommonBigrams(topBigrams);
+
+                // Calculate double letter frequencies
+                const topDoubleLetters = calculateDoubleLetters(text);
+                setDoubleLetters(topDoubleLetters);
+
+                // Update standard alphabet with input text frequency
+                setStandardAlphabet(fullInputFrequency);
+
+                // Decrypt with current decoding alphabet
+                decryptText(decodingAlphabet, text);
+            };
+
+            // Run decryption when decoding alphabet changes
+            React.useEffect(() => {
+                decryptText(decodingAlphabet, inputText);
+            }, [decodingAlphabet, standardAlphabet]);
+
+            return (
+                <div className="cipher-container">
+                    <h1>Monoalphabetic Cipher Decoder</h1>
+
+                    <div className="swap-hint">
+                        Click two letters to swap their positions in the decoding alphabet
+                    </div>
+
+                    <div className="frequency-info">
+                        Standard alphabet adjusts to input text letter frequencies
+                    </div>
+
+                    <div className="alphabet-container">
+                        <h3>Standard Alphabet (by Input Frequency)</h3>
+                        <div className="alphabet-row">
+                            {standardAlphabet.map((letter, index) => (
+                                <div key={index} className="alphabet-letter">
+                                    {letter}
+                                </div>
+                            ))}
+                        </div>
+
+                        <h3>Decoding Alphabet</h3>
+                        <div className="alphabet-row">
+                            {decodingAlphabet.map((letter, index) => (
+                                <div
+                                    key={index}
+                                    className={`alphabet-letter ${
+                                        selectedLetters.some(sl => sl.index === index) ? 'selected' : ''
+                                    }`}
+                                    onClick={() => handleLetterClick(letter, index)}
+                                >
+                                    {letter}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <textarea
+                        placeholder="Enter encrypted text here"
+                        value={inputText}
+                        onChange={handleInputChange}
+                    />
+
+                    <textarea
+                        placeholder="Decrypted text will appear here"
+                        value={outputText}
+                        readOnly
+                    />
+
+                    {mostCommonBigrams.length > 0 && (
+                        <div className="bigrams-container">
+                            <h3>Most Common Bigrams in Your Text</h3>
+                            <div className="bigrams-list">
+                                {mostCommonBigrams.map((item, index) => (
+                                    <div key={index} className="bigram-item">
+                                        {item.bigram}: {item.count}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="english-bigrams-container">
+                        <h3>Most Common English Bigrams</h3>
+                        <div className="bigrams-list">
+                            {englishCommonBigrams.map((item, index) => (
+                                <div key={index} className="bigram-item">
+                                    {item.bigram}
+                                </div>
+                            ))}
+                        </div>
+                        <p style={{fontSize: '0.8em', color: '#666', marginTop: '10px'}}>
+                            Tip: Compare these with your text's bigrams to help crack the cipher
+                        </p>
+                    </div>
+
+                    {doubleLetters.length > 0 && (
+                        <div className="double-letters-container">
+                            <h3>Double Letters in Your Text</h3>
+                            <div className="double-letters-list">
+                                {doubleLetters.map((item, index) => (
+                                    <div key={index} className="double-letter-item">
+                                        {item.doubleLetter}: {item.count}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="english-double-letters-container">
+                        <h3>Most Common English Double Letters</h3>
+                        <div className="double-letters-list">
+                            {englishCommonDoubleLetters.map((item, index) => (
+                                <div key={index} className="double-letter-item">
+                                    {item.doubleLetter}
+                                </div>
+                            ))}
+                        </div>
+                        <p style={{fontSize: '0.8em', color: '#666', marginTop: '10px'}}>
+                            Tip: Double letters are distinctive patterns that can help identify letter substitutions
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<MonoalphabeticDecoder />, document.getElementById('root'));
+    </script>
+</body>
+</html>
