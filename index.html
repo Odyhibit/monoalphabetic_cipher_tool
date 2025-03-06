@@ -26,19 +26,58 @@
         .alphabet-row {
             display: flex;
             gap: 5px;
-            margin-bottom: 5px;
+            margin-bottom: 25px; /* Increased to make room for lock icons */
         }
         .alphabet-letter {
-            width: 30px;
+            width: 23px;
             height: 30px;
             border: 1px solid #ddd;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            position: relative;
+            transition: background-color 0.2s ease, transform 0.1s ease;
         }
         .alphabet-letter.selected {
-            background-color: #e0e0e0;
+            background-color: #c0e0f0;
+            transform: scale(1.05);
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        .alphabet-letter.locked {
+            background-color: #f8f8f8;
+            cursor: not-allowed;
+            border: 1px solid #ccc;
+        }
+        .alphabet-letter.locked::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.03);
+            pointer-events: none;
+        }
+        .lock-icon {
+            position: absolute;
+            bottom: -20px; /* Positioned below the letter */
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 2; /* Ensure it's above other elements */
+            background-color: white; /* Background to prevent overlap issues */
+            border-radius: 50%;
+            padding: 2px;
+            width: 12px;
+            height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .lock-icon:hover {
+            background-color: #f0f0f0;
         }
         textarea {
             width: 100%;
@@ -78,6 +117,24 @@
             background-color: #f0f0f0;
             padding: 10px;
             border-radius: 5px;
+        }
+        .alphabet-letter-wrapper {
+            position: relative;
+        }
+        .click-indicator {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: rgba(64, 158, 255, 0.2);
+            transform: scale(0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        .click-indicator.active {
+            transform: scale(1.2);
+            opacity: 1;
         }
     </style>
 </head>
@@ -149,6 +206,8 @@
             const [selectedLetters, setSelectedLetters] = React.useState([]);
             const [mostCommonBigrams, setMostCommonBigrams] = React.useState([]);
             const [doubleLetters, setDoubleLetters] = React.useState([]);
+            const [lockedIndices, setLockedIndices] = React.useState(new Set());
+            const [clickIndicators, setClickIndicators] = React.useState({});
 
             // Calculate letter frequencies in the input text
             const calculateFrequency = (text) => {
@@ -210,7 +269,25 @@
                     }));
             };
 
+            // Show click animation on letter
+            const showClickAnimation = (index) => {
+                setClickIndicators(prev => ({...prev, [index]: true}));
+
+                // Clear animation after a short delay
+                setTimeout(() => {
+                    setClickIndicators(prev => ({...prev, [index]: false}));
+                }, 300);
+            };
+
             const handleLetterClick = (letter, index) => {
+                // Check if letter is locked
+                if (lockedIndices.has(index)) {
+                    return;
+                }
+
+                // Show click animation
+                showClickAnimation(index);
+
                 if (selectedLetters.length === 0) {
                     setSelectedLetters([{letter, index}]);
                 } else if (selectedLetters.length === 1) {
@@ -218,6 +295,12 @@
                     const second = {letter, index};
 
                     if (first.index !== second.index) {
+                        // Check if second letter is locked
+                        if (lockedIndices.has(second.index)) {
+                            setSelectedLetters([]);
+                            return;
+                        }
+
                         const newDecoding = [...decodingAlphabet];
                         [newDecoding[first.index], newDecoding[second.index]] =
                         [newDecoding[second.index], newDecoding[first.index]];
@@ -225,7 +308,28 @@
                         setDecodingAlphabet(newDecoding);
                         setSelectedLetters([]);
                         decryptText(newDecoding, inputText);
+                    } else {
+                        // Clicking the same letter twice deselects it
+                        setSelectedLetters([]);
                     }
+                }
+            };
+
+            const toggleLock = (index, event) => {
+                // Stop propagation to prevent triggering letter click
+                event.stopPropagation();
+
+                const newLockedIndices = new Set(lockedIndices);
+                if (newLockedIndices.has(index)) {
+                    newLockedIndices.delete(index);
+                } else {
+                    newLockedIndices.add(index);
+                }
+                setLockedIndices(newLockedIndices);
+
+                // If a locked letter was selected, deselect it
+                if (selectedLetters.some(item => item.index === index)) {
+                    setSelectedLetters([]);
                 }
             };
 
@@ -283,7 +387,7 @@
                     <h1>Monoalphabetic Cipher Decoder</h1>
 
                     <div className="swap-hint">
-                        Click two letters to swap their positions in the decoding alphabet
+                        Click two letters to swap their positions in the decoding alphabet. Use the padlock icons to lock/unlock letters.
                     </div>
 
                     <div className="frequency-info">
@@ -300,20 +404,32 @@
                             ))}
                         </div>
 
-                        <h3>Decoding Alphabet</h3>
+
                         <div className="alphabet-row">
                             {decodingAlphabet.map((letter, index) => (
-                                <div
-                                    key={index}
-                                    className={`alphabet-letter ${
-                                        selectedLetters.some(sl => sl.index === index) ? 'selected' : ''
-                                    }`}
-                                    onClick={() => handleLetterClick(letter, index)}
-                                >
-                                    {letter}
+                                <div className="alphabet-letter-wrapper" key={index}>
+                                    <div
+                                        className={`alphabet-letter ${
+                                            selectedLetters.some(sl => sl.index === index) ? 'selected' : ''
+                                        } ${lockedIndices.has(index) ? 'locked' : ''}`}
+                                        onClick={() => handleLetterClick(letter, index)}
+                                    >
+                                        {letter}
+                                        <div className={`click-indicator ${clickIndicators[index] ? 'active' : ''}`}></div>
+                                    </div>
+                                    <div
+                                        className="lock-icon"
+                                        onClick={(e) => toggleLock(index, e)}
+                                        title={lockedIndices.has(index) ? "Unlock this letter" : "Lock this letter"}
+                                    >
+                                        {lockedIndices.has(index)
+  ? <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+  : <svg viewBox="0 0 24 24"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z"/></svg>}
+                                    </div>
                                 </div>
                             ))}
                         </div>
+                        <h3>Decoding Alphabet</h3>
                     </div>
 
                     <textarea
